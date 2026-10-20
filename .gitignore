@@ -1,0 +1,22 @@
+# Python virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Local settings
+.env
+.env.*
+
+# Oscilloscope measurements
+results/
+*.npz
+
+# Logs
+*.log
+
+# VS Code local settings
+.vscode/
