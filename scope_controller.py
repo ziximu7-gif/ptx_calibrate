@@ -1,45 +1,78 @@
 import time
 import numpy as np
 import pyvisa
-from config import VISA_ADDRESS, VISA_TIMEOUT_MS
+import config as cfg
 class TektronixScope:
-    def __init__(self, resource_name=VISA_ADDRESS):
+    def __init__(self, resource_name=cfg.VISA_ADDRESS):
         self.resource_name = resource_name
         self.rm = None
         self.scope = None
-    def configure_acquisition(self, trigger_level=0.0):
-        """配置连续正弦 RF 的单次采集。"""
-        # 普通采样模式
+    def configure_acquisition(self):
+        """按 config.py 配置示波器采集。"""
+        if self.scope is None:
+            raise RuntimeError("示波器未连接")
+        self.scope.write("ACQUIRE:STATE STOP")
+        channels = {
+            cfg.REFERENCE_CHANNEL,
+            cfg.RF_CHANNEL,
+        }
+        for channel in channels:
+            self.scope.write(f"SELECT:CH{channel} ON")
+        if cfg.AUTO_CONFIGURE_HORIZONTAL:
+            self.scope.write(
+                f"HORIZONTAL:RECORDLENGTH "
+                f"{cfg.RECORD_LENGTH}"
+            )
+            self.scope.write(
+                f"HORIZONTAL:SCALE "
+                f"{cfg.HORIZONTAL_SCALE_S:.12g}"
+            )
         self.scope.write("ACQUIRE:MODE SAMPLE")
-        # A 触发使用边沿触发
         self.scope.write("TRIGGER:A:TYPE EDGE")
-        # CH1 作为参考触发源
-        self.scope.write("TRIGGER:A:EDGE:SOURCE CH1")
-        # 上升沿触发
-        self.scope.write("TRIGGER:A:EDGE:SLOPE RISE")
-        # 设置 CH1 触发电平，单位 V
         self.scope.write(
-            f"TRIGGER:A:LEVEL:CH1 {trigger_level}"
+            f"TRIGGER:A:EDGE:SOURCE "
+            f"CH{cfg.TRIGGER_SOURCE_CHANNEL}"
         )
-        # Normal：只在有效触发发生后采集
-        self.scope.write("TRIGGER:A:MODE NORMAL")
-        # 单次序列模式
-        self.scope.write("ACQUIRE:STOPAFTER SEQUENCE")
+        self.scope.write(
+            f"TRIGGER:A:EDGE:SLOPE "
+            f"{cfg.TRIGGER_SLOPE}"
+        )
+        self.scope.write(
+            f"TRIGGER:A:LEVEL:CH"
+            f"{cfg.TRIGGER_SOURCE_CHANNEL} "
+            f"{cfg.TRIGGER_LEVEL_V}"
+        )
+        self.scope.write(
+            f"TRIGGER:A:MODE {cfg.TRIGGER_MODE}"
+        )
+        self.scope.write(
+            "ACQUIRE:STOPAFTER SEQUENCE"
+        )
+        actual_length = int(float(
+            self.query("HORIZONTAL:RECORDLENGTH?")
+        ))
+        actual_scale = float(
+            self.query("HORIZONTAL:SCALE?")
+        )
+        print(
+            f"实际记录长度: {actual_length} points"
+        )
+        print(
+            f"实际水平时基: "
+            f"{actual_scale * 1e9:.3f} ns/div"
+        )
     def connect(self):
         """连接示波器。"""
-        self.rm = pyvisa.ResourceManager("@py")
+        self.rm = pyvisa.ResourceManager(cfg.VISA_BACKEND)
         try:
             self.scope = self.rm.open_resource(
                 self.resource_name
             )
-            self.scope.timeout = 30000
+            self.scope.timeout = cfg.VISA_TIMEOUT_MS
             self.scope.write_termination = "\n"
             self.scope.read_termination = "\n"
-
             self.scope.write("HEADER OFF")
-
             return self.scope.query("*IDN?").strip()
-
         except Exception:
             self.close()
             raise
@@ -48,7 +81,7 @@ class TektronixScope:
         if self.scope is None:
             raise RuntimeError("示波器未连接")
         return self.scope.query(command).strip()
-    def acquire_single(self, timeout_s=15):
+    def acquire_single(self, timeout_s=cfg.ACQUISITION_TIMEOUT_S):
         """
         启动一次单次序列采集，等待示波器停止。
         要求：
@@ -86,7 +119,7 @@ class TektronixScope:
             "等待采集超时，请检查触发源和触发电平"
         )
 
-    def read_waveform(self, channel, max_points=10000):
+    def read_waveform(self, channel, max_points=cfg.MAX_TRANSFER_POINTS):
         """
         从已停止的采集记录读取指定模拟通道。
 
