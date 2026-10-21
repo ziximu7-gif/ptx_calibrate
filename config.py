@@ -45,6 +45,9 @@ TRIGGER_MODE = "NORMAL"
 # 5. Analysis settings
 # ==========================================
 MIN_FIT_R_SQUARED = 0.98
+# Hard Pulse plateform arrange
+FIT_START_S = 0.2e-6
+FIT_END_S = 0.7e-6
 # ==========================================
 # 6. Data output
 # ==========================================

@@ -84,9 +84,18 @@ def main():
                     continue
                 if sample_rate < cfg.TARGET_SAMPLE_RATE_HZ:
                     print("提醒：实际采样率低于目标采样率")
-                # 6. 正弦拟合与相位计算
+                # 6. 只截取 Hard Pulse 的稳定平台区
+                mask = (
+                    (t1 >= cfg.FIT_START_S)
+                    & (t1 <= cfg.FIT_END_S)
+                )
+                if np.count_nonzero(mask) < 10:
+                    raise ValueError("拟合窗口内采样点不足")
                 result = analyze_two_channels(
-                    t1, v1, v2, cfg.RF_FREQUENCY_HZ
+                    t1[mask],
+                    v1[mask],
+                    v2[mask],
+                    cfg.RF_FREQUENCY_HZ,
                 )
                 ref = result["reference"]
                 rf = result["rf"]
