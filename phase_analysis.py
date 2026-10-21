@@ -1,6 +1,6 @@
-
 from dataclasses import dataclass
 import numpy as np
+from scipy.optimize import minimize_scalar
 
 @dataclass
 class SineFitResult:
@@ -125,3 +125,27 @@ def analyze_two_channels(
         "rf": rf,
         "phase_difference_deg": delta_deg,
     }
+
+def estimate_frequency(
+    t,
+    voltage,
+    nominal_frequency_hz,
+    search_range_hz,
+):
+    """在预期频率附近，寻找正弦拟合残差最小的频率。"""
+    def error(frequency):
+        fit = fit_sine_phase(t, voltage, frequency)
+        return fit.residual_rms
+    result = minimize_scalar(
+        error,
+        bounds=(
+            nominal_frequency_hz - search_range_hz,
+            nominal_frequency_hz + search_range_hz,
+        ),
+        method="bounded",
+        options={"xatol": 10.0},
+    )
+    if not result.success:
+        raise RuntimeError("频率拟合失败")
+    return float(result.x)
+

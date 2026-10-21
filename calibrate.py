@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import config as cfg
 from scope_controller import TektronixScope
-from phase_analysis import analyze_two_channels, wrap_degrees
+from phase_analysis import (analyze_two_channels,estimate_frequency,wrap_degrees,)
 def main():
     scope = TektronixScope()
     output_dir = (
@@ -84,19 +84,18 @@ def main():
                     continue
                 if sample_rate < cfg.TARGET_SAMPLE_RATE_HZ:
                     print("提醒：实际采样率低于目标采样率")
-                # 6. 只截取 Hard Pulse 的稳定平台区
-                mask = (
-                    (t1 >= cfg.FIT_START_S)
-                    & (t1 <= cfg.FIT_END_S)
-                )
-                if np.count_nonzero(mask) < 10:
-                    raise ValueError("拟合窗口内采样点不足")
-                result = analyze_two_channels(
+                
+                # 6. 根据 CH1 平台波形估计实际频率
+                actual_frequency = estimate_frequency(
                     t1[mask],
                     v1[mask],
-                    v2[mask],
                     cfg.RF_FREQUENCY_HZ,
+                    cfg.FREQUENCY_SEARCH_RANGE_HZ,
                 )
+                print(f"拟合频率: {actual_frequency / 1e6:.6f} MHz")
+                print(f"相对设定频率偏移: {((actual_frequency - cfg.RF_FREQUENCY_HZ) / 1e3):+.3f} kHz")
+                # 使用同一个实际频率拟合两路相位
+                result = analyze_two_channels(t1[mask],v1[mask],v2[mask],actual_frequency,)
                 ref = result["reference"]
                 rf = result["rf"]
                 print(f"参考信号 R²：{ref.r_squared:.6f}")
